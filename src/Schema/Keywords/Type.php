@@ -11,6 +11,7 @@ use League\OpenAPIValidation\Schema\Exception\InvalidSchema;
 use League\OpenAPIValidation\Schema\Exception\TypeMismatch;
 use League\OpenAPIValidation\Schema\TypeFormats\FormatsContainer;
 use RuntimeException;
+use Psr\Http\Message\ServerRequestInterface;
 
 use function class_exists;
 use function is_array;
@@ -38,6 +39,11 @@ class Type extends BaseKeyword
      */
     public function validate($data, string $type, ?string $format = null): void
     {
+        //Temporary workaround to log non-compliant endpoints
+        $container = \Lib\Container::getInstance();
+        $request = $container->get(ServerRequestInterface::class);
+        $logger = $container->get('Logger');
+
         switch ($type) {
             case CebeType::OBJECT:
                 if (! is_object($data) && ! (is_array($data) && ArrayHelper::isAssoc($data)) && $data !== []) {
@@ -52,19 +58,53 @@ class Type extends BaseKeyword
 
                 break;
             case CebeType::BOOLEAN:
-                if (! is_bool($data)) {
+                //Temporary workaround to log non-compliant endpoints
+                if(is_string($data)){
+                    $logger->info('Incompatible data type provided on GraphQL body',
+                        [
+                            'request_path' => $request->getUri()->getPath(),
+                            'data_type' => CebeType::BOOLEAN,
+                            'value' => $data
+                        ]
+                    );
+                }
+
+                $stringifiedBool = is_scalar($data) && preg_match('#^(true|false)$#i', (string) $data);
+                if (! is_bool($data) && ! $stringifiedBool) {
                     throw TypeMismatch::becauseTypeDoesNotMatch(CebeType::BOOLEAN, $data);
                 }
 
                 break;
             case CebeType::NUMBER:
-                if (is_string($data) || ! is_numeric($data)) {
+                //Temporary workaround to log non-compliant endpoints
+                if (is_string($data)) {
+                    $logger->info('Incompatible data type provided on GraphQL body',
+                        [
+                            'request_path' => $request->getUri()->getPath(),
+                            'data_type' => CebeType::NUMBER,
+                            'value' => $data
+                        ]
+                    );
+                }
+                if (! is_numeric($data)) {
                     throw TypeMismatch::becauseTypeDoesNotMatch(CebeType::NUMBER, $data);
                 }
 
                 break;
             case CebeType::INTEGER:
-                if (! is_int($data)) {
+                //Temporary workaround to log non-compliant endpoints
+                if(is_string($data)){
+                    $logger->info('Incompatible data type provided on GraphQL body',
+                        [
+                            'request_path' => $request->getUri()->getPath(),
+                            'data_type' => CebeType::INTEGER,
+                            'value' => $data
+                        ]
+                    );
+                }
+
+                $stringifiedInt = is_scalar($data) && preg_match('#^[-+]?\d+$#', (string) $data) && ! is_float($data);
+                if (! is_int($data) && ! $stringifiedInt) {
                     throw TypeMismatch::becauseTypeDoesNotMatch(CebeType::INTEGER, $data);
                 }
 
